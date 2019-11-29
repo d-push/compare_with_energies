@@ -5,100 +5,14 @@ import scipy.stats as sps
 import matplotlib.pyplot as plt
 import shutil as sh
 import argparse
+import configparser
+import subprocess
 
 #sys.path.append("./data_proc/data_proc_basics")
 import data_proc as dp
 
 def fit_function(x, a, b):
 	return a * x + b
-
-"""
-def r_2(x, y, a, b):
-	return 1 - np.sum((y - fit_function(x, a, b)) ** 2) / np.sum((y - y.mean()) ** 2)
-
-
-def set_bounds(foldername_ac_splitted, inv, bounds_inv, bounds_not_inv):
-
-	'''
-	Select bounds for inverted or non-inverted acoustic signal.
-	'''
-
-	if not inv or 'kalibr' in foldername_ac_splitted or 'calibr' in foldername_ac_splitted:
-		return bounds_not_inv
-	return bounds_inv
-"""
-
-"""
-def fit(fit_function, energies_parrots, maxima_new, bounds = (np.array([1e-5, -np.inf]), np.array([np.inf, np.inf]))):
-
-	'''Get fitting parameters and r^2.'''
-
-	popt, pcov = curve_fit(fit_function, energies_parrots, maxima_new, bounds=bounds)
-
-	a = popt[0]
-	b = popt[1]
-	cur_r_2 = r_2(energies_parrots, maxima_new, a, b)
-	print("Fit function: a = {}, b = {}, r_2 = {}".format(a,b,cur_r_2))
-	a1, b1, rvalue = sps.linregress(energies_parrots, maxima_new)[0:3]
-	print("Fit function linregress: a1 = {}, b1 = {}, rvalue^2 = {}".format(a1,b1,rvalue**2))
-	print("Количество сопоставленных данных: {}".format(len(energies_parrots)))
-
-	return(cur_r_2, a, b, a1, b1)
-
-
-def fit(fit_function, energies_parrots, maxima_new, bounds = (np.array([1e-5, -np.inf]), np.array([np.inf, np.inf]))):
-
-	'''Get fitting parameters and r^2.'''
-
-	a, b, cur_r_2 = sps.linregress(energies_parrots, maxima_new)[0:3]
-	print("Fit function: a = {}, b = {}, r_2 = {}".format(a,b,cur_r_2))
-	a1, b1, rvalue = sps.linregress(energies_parrots, maxima_new)[0:3]
-	print("Fit function linregress: a1 = {}, b1 = {}, rvalue^2 = {}".format(a1,b1,rvalue**2))
-	print("Количество сопоставленных данных: {}".format(len(energies_parrots)))
-
-	return(cur_r_2, a, b, a1, b1)
-
-#Старая версия с polyfit.
-
-def fit_and_check_shift(fit_function, energies_parrots, maxima_new, best_shift, shift, max_r_2, num_matched, set_limit, bounds = (np.array([1e-5, -np.inf]), np.array([np.inf, np.inf]))):
-
-	popt, pcov = curve_fit(fit_function, energies_parrots, maxima_new, bounds=bounds)
-
-	a = popt[0]
-	b = popt[1]
-	cur_r_2 = r_2(energies_parrots, maxima_new, a, b)
-	print("Fit and check function: a = {}, b = {}, r_2 = {}".format(a,b,cur_r_2))
-	print("Количество сопоставленных данных: {}".format(len(energies_parrots)))
-
-	if cur_r_2 > max_r_2 and len(energies_parrots) >= set_limit:
-		max_r_2 = cur_r_2
-		best_shift = shift
-		num_matched = len(energies_parrots)
-
-	return(best_shift, max_r_2, a, b, num_matched)
-
-def fit_and_check_shift(fit_function, energies_parrots, maxima_new, best_shift, shift, max_r_2, num_matched, set_limit, bounds = (np.array([1e-5, -np.inf]), np.array([np.inf, np.inf]))):
-
-	a, b, cur_r_2 = sps.linregress(energies_parrots, maxima_new)[0:3]
-	print("Fit and check function: a = {}, b = {}, r_2 = {}".format(a,b,cur_r_2))
-	print("Количество сопоставленных данных: {}".format(len(energies_parrots)))
-
-	if cur_r_2 > max_r_2 and len(energies_parrots) >= set_limit:
-		max_r_2 = cur_r_2
-		best_shift = shift
-		num_matched = len(energies_parrots)
-
-	return(best_shift, max_r_2, a, b, num_matched)
-
-def check_best_shift(cur_r_2, max_r_2, energies_parrots, set_limit, shift, best_shift):
-
-	if cur_r_2 > max_r_2 and len(energies_parrots) >= set_limit:
-		max_r_2 = cur_r_2
-		best_shift = shift
-		num_matched = len(energies_parrots)
-
-	return(best_shift, max_r_2, num_matched)
-"""
 
 def calc_av_squared_deviation_from_trend(fit_function, a, b, X, Y):
 	'''
@@ -127,6 +41,7 @@ def f_rem_out(fit_function, foldername_ac, a, b, a1, b1, energies_parrots, maxim
 	#Построение нового графика (без выпадающих точек).
 	calibration_file = foldername_ac+"/Калибровка_same_rem_out" + ".png"
 	dp.en_wf_plot(energies_parrots_rem_out, maxima_new_rem_out, calibration_file, style = '.')
+	scatter_plot(energies_parrots_rem_out, maxima_new_rem_out, title='rem_out')
 	##########NEW##############
 	plt.figure(figsize=(10.5, 9.0), dpi=200)
 	plt.plot(energies_parrots_rem_out, maxima_new_rem_out, '.', color='k', lw=1.5)
@@ -158,34 +73,57 @@ def parse_cmd_line():
 		args.ac_lims = np.asarray(args.ac_lims)
 	if args.shift_lims is None:
 		args.shift_lims = [-3, 5]
-
 	return(args)
 
+def get_config(path):
+    """
+    Returns the config object
+    """
+    if not os.path.exists(path):
+        print ('Error: no .ini file')
+    config = configparser.ConfigParser()
+    config.read(path)
+    return config
+
+def scatter_plot(x, y, title="scatter", width=80, height=25):
+	a, b= sps.linregress(x, y)[0:2]
+	gnuplot = subprocess.Popen(["/usr/bin/gnuplot"], stdin=subprocess.PIPE)
+	gnuplot.stdin.write(("set term dumb %d %d\n"%(width, height)).encode('utf-8'))
+	gnuplot.stdin.write(("f(x) = %d*x+ %d\n"%(a,b)).encode('utf-8'))
+	gnuplot.stdin.write(("plot '-' using 1:2 title '%s' with points, f(x) title 'ax+b' with lines \n" % (title)).encode('utf-8'))
+	for i,j in zip(x,y):
+ 		gnuplot.stdin.write(("%f %f\n" % (i,j)).encode('utf-8'))
+	gnuplot.stdin.write("e\n".encode('utf-8'))
+	gnuplot.stdin.flush()
+
 def main():
+	path = "settings.ini"
+	config = get_config(path)
+
 	#%% Константы
-	filetype_en = ".dat"
-	#shift_min = -100
-	#shift_max = 100
-	set_limit = 10 # Минимальная длина выборки, начиная с которой данные считаются успешно сопоставленными.
-	use_fon = True # Использовать ли сигнал "фона" (земли) с диода.
-	col_fon = 6 #"старая" версия - 8, "новая" - 6.
-	col_trig = 8 #"старая" версия - 6, "новая" - 8.
-	col_en = 9 # номер столбца с энергиями.
-	#use_trig = True # Использовать ли колонку с сигналом строба, или считать начало записи выборки в начале файла с энергиями.
-	r2_coeff = 1.0 # Если в режиме без коррекции пропусков (--try) r^2 > r2_coeff*r^2 в обычном режиме сопоставления, то используется режим без коррекции пропусков.
-	low_r2_threshold = 0.1 # Если r^2 ниже этого значения, сопоставление считается проведённым неуспешно, выполняется попытка автоматического поиска shift (по начальным временам сопоставляемых данных), и сопоставление при этом значении shift.
+	filetype_en = config.get('Сonstants', 'filetype_en')
+	#shift_min = config.getint('Сonstants', 'shift_min')
+	#shift_max = config.getint('Сonstants', 'shift_max')
+	set_limit = config.getint('Сonstants', 'set_limit')
+	use_fon = config.getboolean('Сonstants', 'use_fon')
+	col_fon = config.getint('Сonstants', 'col_fon')
+	col_trig = config.getint('Сonstants', 'col_trig')
+	col_en = config.getint('Сonstants', 'col_en')
+	#use_trig = config.getboolean('Сonstants', 'use_trig')
+	r2_coeff = config.getfloat('Сonstants', 'r2_coeff')
+	low_r2_threshold = config.getfloat('Сonstants', 'low_r2_threshold')
 	bounds_inv = (np.array([-np.inf, -np.inf]), np.array([-1e-5, np.inf])) #Границы подбора параметров аппроксимации для "перевёрнутой" акустики.
 	bounds_not_inv = (np.array([1e-5, -np.inf]), np.array([np.inf, np.inf])) #Границы подбора параметров аппроксимации для "не перевёрнутой" акустики.
-	DELTA = 15 #[мс] Максимально допустимый сдвиг текущего кадра по времени относительно рассчётного времени. По умолчанию DELTA = 15 мс.
-	is_zero = 1e-8 #Условие "обращения в ноль" значений float при проверках.
-	is_zero_int = 1e-1 #Условие "обращения в ноль" значений float при проверках, когда сравниваются целые числа.
-	N_out = 5.0 #Если данные отклоняются от линейной зависимости более, чем на N_out*sigma, то они выбрасываются из завершающего сопоставления.
-	en_str_length_default = 17 #Длина строки в файле с энергиями (значение по умолчанию).
+	DELTA = config.getint('Сonstants', 'DELTA')
+	is_zero = config.getfloat('Сonstants', 'is_zero')
+	is_zero_int = config.getfloat('Сonstants', 'is_zero_int')
+	N_out = config.getfloat('Сonstants', 'N_out')
+	en_str_length_default = config.getint('Сonstants', 'en_str_length_default')
 
 	#%% Начальные параметры
-	#no_gaps = False #Используется обычный метод сопоставления (с коррекцией пропусков) - False, или без коррекции пропусков (в режиме --try). Флаг, используемый в программе для вывода в файл режима сопоставления, начальное значение менять не нужно.
+	#no_gaps = config.getboolean('Initial_parameters', 'no_gaps')
 
-	#%% Parse command line arguments.
+    #%% Parse command line arguments.
 	args = parse_cmd_line()
 	print(args)
 
@@ -197,14 +135,12 @@ def main():
 	use_trig = not args.no_trig # Использовать ли колонку с сигналом строба, или считать начало записи выборки в начале файла с энергиями.
 
 	#%% Print some reminders for user.
-	print("\n!!!")
+	print("\n***Program initialized***")
 	print("use_fon = {}".format(use_fon))
 	print("use_trig = {}".format(use_trig))
 	print(f'DELTA = {DELTA}\n')
 
 	print(folder_en)
-
-	print("Use try_no_losses={}, same_computer={}, old_osc={}, inv={}".format(args.try_no_losses, args.same_computer, args.old_osc, args.inv))
 
 	#%% Main.
 
@@ -254,6 +190,7 @@ def main():
 				graph_file = foldername_ac+"/Фон.png"
 				fon_i = np.linspace(0, len(fon), len(fon))
 				dp.en_wf_plot(fon_i, fon, graph_file, style = '-')
+				scatter_plot(fon_i, fon, title='Фон')
 
 				#i_start = 0
 				if args.old_osc:
@@ -266,12 +203,8 @@ def main():
 					break
 
 				###TEMP####
-				print("\n!!!")
-				print(foldername_ac_splitted)
-				###TEMP####
 				if 'kalibr' in foldername_ac_splitted or 'calibr' in foldername_ac_splitted:
-					print("HERE1!!!\n")
-					print(f'args.ac_lims = {args.ac_lims}')
+					#print('calibr/kalibr is True: ','args.ac_lims = {args.ac_lims}')
 					maxima = dp.read_maxima(foldername_ac, filenames_ac_times, filenames_ac_info, ext, area=area, fon_coeff=1.0, old_osc=args.old_osc, limit_max = True, inv=False, ac_lims=None, use_run_av=args.run_av)
 
 					###TEMP###
@@ -279,8 +212,7 @@ def main():
 					###TEMP###
 
 				else:
-					print("HERE2!!!\n")
-					print(f'args.ac_lims = {args.ac_lims}')
+					#print('calibr/kalibr is False: ','args.ac_lims = {args.ac_lims}')
 					maxima = dp.read_maxima(foldername_ac, filenames_ac_times, filenames_ac_info, ext, area=area, fon_coeff=1.0, old_osc=args.old_osc, limit_max = False, inv=args.inv, ac_lims=args.ac_lims, use_run_av=args.run_av)
 
 				if ft == 'ac' and args.same_computer:
@@ -303,7 +235,7 @@ def main():
 					### Построение графика (для случая "same_computer").
 					calibration_file = foldername_ac+"/Калибровка_same" + ".png"
 					dp.en_wf_plot(energies_parrots, maxima_new, calibration_file, style = '.')
-
+					scatter_plot(energies_parrots, maxima_new, title='same')
 					#########NEW#############
 					a, b, cur_r_2 = sps.linregress(energies_parrots, maxima_new)[0:3]
 					a1, b1 = sps.linregress(energies_parrots, maxima_new)[0:2]
@@ -332,7 +264,6 @@ def main():
 					for shift in range(args.shift_lims[0], args.shift_lims[1]+1):
 						energies_parrots = []
 						maxima_new = []
-						print("shift = {}".format(shift))
 
 						if args.try_no_losses == True and dp.check_if_there_were_lost(filename_en, foldername_ac, ext, col_en=col_en, col_fon=col_fon, col_trig=col_trig, use_fon = use_fon, old_osc=args.old_osc, line_length = en_str_length):
 							energies_parrots_old = []
@@ -377,6 +308,7 @@ def main():
 						energies_parrots = np.array(energies_parrots)
 						maxima_new = np.array(maxima_new)
 
+
 						#%% Построение графиков.
 						if args.try_no_losses == True and dp.check_if_there_were_lost(filename_en, foldername_ac, ext, col_en=col_en, col_fon=col_fon, col_trig=col_trig, use_fon = use_fon, old_osc=args.old_osc, line_length = en_str_length):
 							# No gaps and general method.
@@ -384,10 +316,12 @@ def main():
 							dp.en_wf_plot(energies_parrots, maxima_new, calibration_file, style = '.', dpi=200)
 							calibration_file = foldername_ac+"/Калибровка_" + str(shift) + ".png"
 							dp.en_wf_plot(energies_parrots_old, maxima_new_old, calibration_file, style = '.', dpi=200)
+							scatter_plot(energies_parrots_old, maxima_new_old, title='shift= '+str(shift))
 						else:
 							# General method.
 							calibration_file = foldername_ac+"/Калибровка_" + str(shift) +".png"
 							dp.en_wf_plot(energies_parrots, maxima_new, calibration_file, style = '.', dpi=200)
+							scatter_plot(energies_parrots, maxima_new, title='shift= '+str(shift))
 
 						if energies_parrots.size <= 1:
 							print('Size of the matched energies array <= 1 for shift {}'.format(shift))
