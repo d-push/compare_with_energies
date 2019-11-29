@@ -8,7 +8,6 @@ import argparse
 import configparser
 import subprocess
 
-#sys.path.append("./data_proc/data_proc_basics")
 import data_proc as dp
 
 def fit_function(x, a, b):
